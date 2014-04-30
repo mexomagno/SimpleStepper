@@ -103,8 +103,8 @@ void SimpleStepper::turn(long N, Dir dir){
 		fprintf(stderr, "ERROR: invalid step number (must be greater than 0)\n");
 		return;
 	}//tomar en cuenta que independiente de la aceleración, se deben dar N steps exactamente.
-	unsigned long t=0,dt,t0,t1; //en microsegundos. Velocidad y aceleración están en segundos. 1s=1000000ms
-	float vel,v0=0,v_posible;
+	unsigned long tpos=0,tvel=0,dt,t0,t1; //en microsegundos. Velocidad y aceleración están en segundos. 1s=1000000ms
+	float vel,v0=0,v_posible,p0=0;
 	float pos=0;
 	int half_N=floor(((float)N)/2.0);
 	//steps recorridos cuando se llegó a vmax
@@ -113,8 +113,8 @@ void SimpleStepper::turn(long N, Dir dir){
 	int cont_steps=0;
 	t0=micros();
 	while (cont_steps<N){ //busyWaiting para dar pasos
-		Serial.print("t: ");
-		Serial.print(t/1000000.0);
+		Serial.print("tvel: ");
+		Serial.print(tvel/1000000.0);
 		Serial.print(" V: ");
 		Serial.print(vel);
 		Serial.print(" paso: ");
@@ -123,10 +123,11 @@ void SimpleStepper::turn(long N, Dir dir){
 		Serial.println(pos);
 		t1=micros();
 		dt=t1-t0;
-		t+=dt;
+		tpos+=dt;
+		tvel+=dt;
 		t0=micros();
 		//obtengo velocidad de este instante. Deja de aumentar si se llegó a vmax.
-		v_posible=v0+_a*(t/1000000.0);
+		v_posible=v0+_a*(tvel/1000000.0);
 		if (v_posible >= _vmax){
 			if (steps_vmax==-1){
 				vel=_vmax;
@@ -137,8 +138,8 @@ void SimpleStepper::turn(long N, Dir dir){
 			vel= v_posible >= 0 ? v_posible : 0;
 		}
 		//obtengo posición teórica. Si pasa a un entero, hay que dar un step.
-		pos=vel*(t/1000000.0)-cont_steps;
-		if (pos>=1){//quiere decir que puedo dar un step
+		pos=p0+vel*(tpos/1000000.0);
+		if ((pos-cont_steps)>=1){//quiere decir que puedo dar un step
 			step(dir);
 			cont_steps++;
 			if (((cont_steps+steps_vmax==N))||((cont_steps==half_N)&&(vel<_vmax))){
@@ -146,7 +147,9 @@ void SimpleStepper::turn(long N, Dir dir){
 				//O si la velocidad máxima aún no se alcanza pero voy en la mitad, debo desacelerar.
 				_a*=-1; //**OJO: SE ESTÁ MODIFICANDO VARIABLE INTERNA QUE DEBIERA SER CONSTANTE **/
 				v0=vel;
-				t=0;
+				tvel=0;
+				tpos=0;
+				p0=pos;
 			}
 		}
 	}
