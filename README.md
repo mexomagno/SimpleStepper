@@ -1,12 +1,25 @@
 SimpleStepper
 =============
 
-Simple library for driving Stepper motors with arduino. It will support acceleration and maybe other stuff.
-<h3>Limitations:</h3>
+<p>Simple library for driving Stepper motors with arduino. This library is for driving your stepper motor without the need of a step-direction type driver. A dual H-bridge and you're done.</p>
+
+<h3>Features</h3>
 <p>
   <ul>
-    <li>As it uses the arduino built-in function "delaMicroseconds" for it's labor, it only supports one motor moving at a time. </li>
-    <li>Because of the same reason, when it's moving the motor, nothing else can happen in the arduino.</li>
-    <li>Only supports Arduino UNO board.</li>
+    <li>Multiple turning units (steps, degrees, revolutions).</li>
+    <li>Accelerated and decelerated movements to manage inertia.</li>
+    <li>High and low speed supported.</li>
+    <li>Rotor position tracking.</li>
+    <li>Customizable parameters (max. velocity, acceleration, position).</li>
   </ul>
 </p>
+<h3>Limitations:</h>
+<p>
+  <ul>
+    <li>The functions are blocking, i.e. you can't do anything else while the motor is moving.</li>
+    <li>You can drive multiple motors but one at a time.</li>
+    <li>For now, only Arduino UNO board is supported.</li>
+    <li>Each motor needs 4 pins to be driven.</li>
+  </ul>
+</p>
+<p>This is under developement and it's been made only for pedagogical reasons, and to eliminate the need for external drivers.</p>
