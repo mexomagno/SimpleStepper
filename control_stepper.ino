@@ -5,11 +5,11 @@
         -Boton a pin 6 y pin 7. Simbolizan giro reloj y contrarreloj respectivamente.
         
         */
-SimpleStepper motor=SimpleStepper(2,3,4,5);
+SimpleStepper motor=SimpleStepper(200,2,3,4,5);
 unsigned char button_pins[]={6,7};
 boolean button_pressed[]={false,false};
 
-boolean debug=1;
+boolean debug=0;
 
 void setup(){
   pinMode(button_pins[0],OUTPUT);
@@ -17,6 +17,10 @@ void setup(){
   if (debug){
     pinMode(13,OUTPUT); //debug
   }
+  if (debug) Serial.begin(9600);
+  motor.setVMax(900);
+  motor.setAcc(9000);
+  
 }
 
 int indice=0;
@@ -59,16 +63,18 @@ void revisarBotones(){
 int cont=0;
 boolean dir=false;
 void loop(){
-  revisarBotones();
-  /*motor.step(dir ? CLOCK : CCLOCK);
-  delay(1);
-  cont++;
-  if (cont>5000){
-    cont =0;
-    dir = !dir;
+  //revisarBotones();
+  /*if (girar){
+    motor.step(dir ? CLOCK : CCLOCK);
+    delay(4);
   }*/
-  if (girar){
-    motor.step(direccion ? CLOCK : CCLOCK); 
-    delay(1);
+  motor.turnDeg(90,CLOCK);
+  delay(50);
+  cont++;
+  if (cont>=3){
+    motor.turnDeg(180,CCLOCK);
+    delay(50);
+    cont=0;
   }
+  
 }
