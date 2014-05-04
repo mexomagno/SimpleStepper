@@ -2,6 +2,9 @@
 #include "SimpleStepper.h"
 #define NSTEPS 8
 #define NPINS 4
+#define clrbit(reg,bit) (reg & ~(1<<bit))
+#define setbit(reg,bit) (reg | (1<<bit))
+#define getbit(reg,bit) ((reg & (1<<bit))>>bit)
 const unsigned char _steps[]={B00001000,B00001100,B00000100,B00000110,B00000010,B00000011,B00000001,B00001001};
 /*Definición del constructor. SimpleStepper(pin1, pin2, pin3, pin4)
 	El constructor acepta pins del 0 al 7. Cualquier valor distinto tendrá comportamientos raros.*/
@@ -17,21 +20,26 @@ const unsigned char _steps[]={B00001000,B00001100,B00000100,B00000110,B00000010,
 	void SimpleStepper::step(Dir dir){
 		//asignar nuevo subíndice
 		_step_index= dir == CCLOCK ? (_step_index+1)%NSTEPS :  (_step_index + NSTEPS -1)%NSTEPS;
+		_pos= dir == CLOCK ? _pos + 1 : _pos - 1;
 		//setear nuevo step en los pines correspondientes. Ser eficiente
 		for (int i = 0; i < NPINS; i++){
-			/*//clear
-			PORTD &= ~(1<<_pins[i]);
-			//set
-				//crear máscara con bit para el pin i, según el step actual
-			unsigned char MASK=(~_steps[_step_index] & (1<<i))>>i; //ojo, MASK contiene el inverso del bit a setear en el pin, guardado en el bit menos significativo. Algo como 0000000X con X = ~bit
-				//setear en PORTD
-			PORTD &= ~(MASK<<_pins[i]);
-			//bit seteado*/
-			digitalWrite(_pins[i],(_steps[_step_index] & (1 << i)) >> i);
+			//Si _pins[i]<8 está en PORTD, sino es PORTB
+			if (_pins[i]<8){
+				if (getbit(_steps[_step_index],i))
+					PORTD=setbit(PORTD,_pins[i]);
+				else
+					PORTD=clrbit(PORTD,_pins[i]);
+			}
+			else{
+				if (getbit(_steps[_step_index],i))
+					PORTB=setbit(PORTB,_pins[i]-8);
+				else
+					PORTB=clrbit(PORTB,_pins[i]-8);
+			}
 		}
 	}
 	void SimpleStepper::turnSteps(long N, Dir dir){
-		turn(N, dir);
+		turn(N*(NSTEPS/4), dir);
 	}
 	void SimpleStepper::turnRev(float N, Dir dir){
 		long new_N=(long)(N*N_MOTOR_STEPS);
@@ -44,7 +52,7 @@ const unsigned char _steps[]={B00001000,B00001100,B00000100,B00000110,B00000010,
 /*Setters*/
 	void SimpleStepper::setMotorSteps(int n){
 		if ((n>=4)&&(n<65536)){
-			N_MOTOR_STEPS=n;
+			N_MOTOR_STEPS=n*(NSTEPS/4);
 		}
 		else
 			fprintf(stderr, "ERROR: invalid value for motor steps (must be between 4 and 65535)\n");
@@ -54,14 +62,14 @@ const unsigned char _steps[]={B00001000,B00001100,B00000100,B00000110,B00000010,
 	}
 	void SimpleStepper::setVMax(float v){
 		if ((v>0)&&(v<65536)){
-			_vmax=v;
+			_vmax=v*(NSTEPS/4);
 		}
 		else
 			fprintf(stderr, "ERROR: invalid value for max speed (must be between 0+ and 65535)\n");
 	}
 	void SimpleStepper::setAcc(float a){
 		if ((a>-65536)&&(a<65536)){
-			_a=a;
+			_a=a*(NSTEPS/4);
 		}
 		else
 			fprintf(stderr, "ERROR: invalid value for acceleration (must be between -65535 and 65535)\n");
@@ -90,11 +98,11 @@ void SimpleStepper::init(int steps_vuelta, int pin1, int pin2, int pin3, int pin
 		pinMode(_pins[i], OUTPUT);
 	}
 	//PRESETS para valores internos. Seteables luego con setters.
-	_vmax=30;
-	_pos=0;
-	_a=4;
+	setVMax(300);
+	setPos(0);
+	setAcc(1000);
 	_step_index=0;
-	N_MOTOR_STEPS=steps_vuelta; //valor por defecto de steps por vuelta
+	setMotorSteps(steps_vuelta); //valor por defecto de steps por vuelta
 	step(CLOCK);
 }
 //turn(N, dir) efectivamente gira N pasos en dirección dir. Acá ocurre la magia de la aceleración.
@@ -103,33 +111,27 @@ void SimpleStepper::turn(long N, Dir dir){
 		fprintf(stderr, "ERROR: invalid step number (must be greater than 0)\n");
 		return;
 	}//tomar en cuenta que independiente de la aceleración, se deben dar N steps exactamente.
-	unsigned long tpos=0,tvel=0,dt,t0,t1; //en microsegundos. Velocidad y aceleración están en segundos. 1s=1000000ms
-	float vel,v0=0,v_posible,p0=0;
+	unsigned long t0,t1,dt;//en microsegundos. Velocidad y aceleración están en segundos. 1s=1000000ms
+	float vel=0,v_posible;
 	float pos=0;
 	int half_N=floor(((float)N)/2.0);
 	//steps recorridos cuando se llegó a vmax
 	int steps_vmax=-1;
+	step(dir);
 	//steps ya concluidos
-	int cont_steps=0;
+	int cont_steps=1;
 	t0=micros();
 	while (cont_steps<N){ //busyWaiting para dar pasos
-		Serial.print("tvel: ");
-		Serial.print(tvel/1000000.0);
-		Serial.print(" V: ");
-		Serial.print(vel);
-		Serial.print(" paso: ");
-		Serial.print(cont_steps);
-		Serial.print(" pos: ");
-		Serial.println(pos);
 		t1=micros();
 		dt=t1-t0;
-		tpos+=dt;
-		tvel+=dt;
 		t0=micros();
-		//obtengo velocidad de este instante. Deja de aumentar si se llegó a vmax.
-		v_posible=v0+_a*(tvel/1000000.0);
-		if (v_posible >= _vmax){
+		//t+=dt;
+	//obtengo velocidad de este instante. Deja de aumentar si se llegó a vmax.
+		v_posible=vel+_a*(dt/1000000.0);
+		if (v_posible > _vmax){
+			//velocidad es mayor a la máxima
 			if (steps_vmax==-1){
+				//sólo se pasa una vez por acá
 				vel=_vmax;
 				steps_vmax=cont_steps+1;
 			}
@@ -137,19 +139,15 @@ void SimpleStepper::turn(long N, Dir dir){
 		else{
 			vel= v_posible >= 0 ? v_posible : 0;
 		}
-		//obtengo posición teórica. Si pasa a un entero, hay que dar un step.
-		pos=p0+vel*(tpos/1000000.0);
-		if ((pos-cont_steps)>=1){//quiere decir que puedo dar un step
+	//obtengo posición teórica. Si pasa a un entero, hay que dar un step.
+		pos=vel>0 ? (pos+vel*(dt/1000000.0)) : N;//
+		if (pos-(cont_steps)>=0){//quiere decir que puedo dar un step
 			step(dir);
 			cont_steps++;
 			if (((cont_steps+steps_vmax==N))||((cont_steps==half_N)&&(vel<_vmax))){
 				//si la velocidad ya es máxima pero  se está llegando al punto donde hay que desacelerar, se desacelera
 				//O si la velocidad máxima aún no se alcanza pero voy en la mitad, debo desacelerar.
 				_a*=-1; //**OJO: SE ESTÁ MODIFICANDO VARIABLE INTERNA QUE DEBIERA SER CONSTANTE **/
-				v0=vel;
-				tvel=0;
-				tpos=0;
-				p0=pos;
 			}
 		}
 	}
@@ -180,5 +178,11 @@ El problema de los steps:
 	Cosas por mejorar:
 		1) Eliminar dependencia de "digitalWrite" para función step(dir)
 		2) Implementar "paralelismo" en el funcionamiento del motor, osea, usar timer interrupts
-		3) 
+		3) Permitir otros microstepping.
+
+Versión 1.0
+	-Aceleración - desaceleración implementadas.
+	-Cantidad exacta de steps.
+
+
 */
