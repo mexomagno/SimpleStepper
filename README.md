@@ -13,7 +13,7 @@ SimpleStepper
     <li>Customizable parameters (max. velocity, acceleration, position).</li>
   </ul>
 </p>
-<h3>Limitations:</h>
+<h3>Limitations:</h3>
 <p>
   <ul>
     <li>The functions are blocking, i.e. you can't do anything else while the motor is moving.</li>
